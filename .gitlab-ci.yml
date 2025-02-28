@@ -1,0 +1,117 @@
+image: docker:latest
+services:
+    - docker:dind
+
+stages:
+    - build
+    - push
+
+variables:
+    DOCKER_HOST: tcp://docker:2375/
+    DOCKER_DRIVER: overlay2
+    DOCKER_TLS_CERTDIR: ""
+    IMAGE_NAME: "beninho/php"
+
+.build_template_php:
+    stage: build
+    script:
+        - docker build php/8 --build-arg PHP_VERSION=${VERSION} -t ${IMAGE_NAME}:${VERSION}
+        - docker save -o ${VERSION}.tar ${IMAGE_NAME}:${VERSION}
+    artifacts:
+        paths:
+            - ${VERSION}.tar
+    only:
+        - main
+
+.push_template:
+    stage: push
+    script:
+        - docker load -i ${VERSION}.tar
+        - docker images
+        - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin
+        - docker push ${IMAGE_NAME}:${VERSION}
+        - |
+            if [ "${PUSH_LATEST}" = "true" ]; then
+                docker tag ${IMAGE_NAME}:${VERSION} ${IMAGE_NAME}:latest
+                docker push ${IMAGE_NAME}:latest
+            fi
+    only:
+        - main
+
+build_php_81:
+    extends: .build_template_php
+    variables:
+        VERSION: "8.1"
+
+build_php_82:
+    extends: .build_template_php
+    variables:
+        VERSION: "8.2"
+
+build_php_83:
+    extends: .build_template_php
+    variables:
+        VERSION: "8.3"
+
+build_php_84:
+    extends: .build_template_php
+    variables:
+        VERSION: "8.4"
+
+push_php_81:
+    extends: .push_template
+    needs:
+        - build_php_81
+    variables:
+        VERSION: "8.1"
+
+push_php_82:
+    extends: .push_template
+    needs:
+        - build_php_82
+    variables:
+        VERSION: "8.2"
+
+push_php_83:
+    extends: .push_template
+    needs:
+        - build_php_83
+    variables:
+        VERSION: "8.3"
+
+push_php_84:
+    extends: .push_template
+    needs:
+        - build_php_84
+    variables:
+        VERSION: "8.4"
+        PUSH_LATEST: true
+
+build_apache:
+    stage: build
+    variables:
+        VERSION: 2.4
+    script:
+        - docker build httpd/${VERSION} -t beninho/httpd:${VERSION}
+        - docker save -o httpd_${VERSION}.tar beninho/httpd:${VERSION}
+    artifacts:
+        paths:
+            - httpd_${VERSION}.tar
+    only:
+        - main
+
+push_apache:
+    stage: push
+    variables:
+        VERSION: 2.4
+    script:
+        - docker load -i httpd_${VERSION}.tar
+        - docker images
+        - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin
+        - docker push beninho/httpd:${VERSION}
+        - docker tag beninho/httpd:${VERSION} beninho/apache:${VERSION}
+        - docker push beninho/apache:${VERSION}
+    needs:
+        - build_apache
+    only:
+        - main

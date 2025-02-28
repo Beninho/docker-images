@@ -1,6 +1,6 @@
 FROM httpd:2.4
 
-ENV DOCKERIZE_VERSION v0.7.0
+ENV DOCKERIZE_VERSION=v0.7.0
 
 RUN apt-get update && \
     apt-get install -y curl ca-certificates && \
