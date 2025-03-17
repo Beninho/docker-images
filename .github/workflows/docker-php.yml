@@ -1,13 +1,13 @@
-name: Docker Build and Push
+name: Docker Build and Push for PHP
 
 on:
     push:
         branches: [ "main" ]
     schedule:
-        - cron: "37 17 * * 5"
+        - cron: "37 17 * * FRI"
 
 jobs:
-    build:
+    build-php:
         runs-on: ubuntu-latest
         strategy:
             matrix:
@@ -15,17 +15,22 @@ jobs:
                 include:
                     -   version: "8.1"
                         folder: "php/8"
+                        php_version: "8.1"
                     -   version: "8.2"
                         folder: "php/8"
+                        php_version: "8.2"
                     -   version: "8.3"
                         folder: "php/8"
-                    -   version: "8.4"
-                        folder: "php/8"
+                        php_version: "8.3"
                     -   version: "8.3-pcov"
                         folder: "php/8-pcov"
+                        php_version: "8.3"
+                    -   version: "8.4"
+                        folder: "php/8"
+                        php_version: "8.4"
                     -   version: "8.4-pcov"
                         folder: "php/8-pcov"
-
+                        php_version: "8.4"
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -35,7 +40,7 @@ jobs:
 
             - name: Build Docker image
               run: |
-                  docker build ${{ matrix.folder }} --build-arg PHP_VERSION=${{ matrix.version }} -t beninho/php:${{ matrix.version }}
+                  docker build ${{ matrix.folder }} --build-arg PHP_VERSION=${{ matrix.php_version }} -t beninho/php:${{ matrix.version }}
                   docker save -o php-${{ matrix.version }}.tar beninho/php:${{ matrix.version }}
 
             - name: Upload artifact
@@ -44,13 +49,12 @@ jobs:
                   name: php-${{ matrix.version }}
                   path: php-${{ matrix.version }}.tar
 
-    push:
+    push-php:
         runs-on: ubuntu-latest
-        needs: build
+        needs: build-php
         strategy:
             matrix:
                 version: ["8.1", "8.2", "8.3", "8.3-pcov", "8.4", "8.4-pcov"]
-
         steps:
             - name: Download artifact
               uses: actions/download-artifact@v4
@@ -69,49 +73,8 @@ jobs:
             - name: Push Docker image
               run: docker push beninho/php:${{ matrix.version }}
 
-            - name: Push latest tag
-              if: ${{ matrix.version == '8.4' }}
+            - name: Push latest tag (if applicable)
+              if: matrix.version == '8.4'
               run: |
                   docker tag beninho/php:8.4 beninho/php:latest
                   docker push beninho/php:latest
-
-    build-apache:
-        runs-on: ubuntu-latest
-        steps:
-            - name: Checkout repository
-              uses: actions/checkout@v4
-
-            - name: Build Apache Docker image
-              run: |
-                  docker build httpd/2.4 -t beninho/httpd:2.4
-                  docker save -o httpd_2.4.tar beninho/httpd:2.4
-
-            - name: Upload artifact
-              uses: actions/upload-artifact@v4
-              with:
-                  name: httpd-2.4
-                  path: httpd_2.4.tar
-
-    push-apache:
-        runs-on: ubuntu-latest
-        needs: build-apache
-        steps:
-            - name: Download artifact
-              uses: actions/download-artifact@v4
-              with:
-                  name: httpd-2.4
-
-            - name: Load Docker image
-              run: docker load -i httpd_2.4.tar
-
-            - name: Show Docker images
-              run: docker images
-
-            - name: Log in to Docker Hub
-              run: echo "${{ secrets.DOCKER_PASSWORD }}" | docker login -u "${{ secrets.DOCKER_USERNAME }}" --password-stdin
-
-            - name: Push Apache Docker image
-              run: |
-                  docker push beninho/httpd:2.4
-                  docker tag beninho/httpd:2.4 beninho/apache:2.4
-                  docker push beninho/apache:2.4
