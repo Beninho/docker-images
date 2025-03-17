@@ -12,8 +12,15 @@ jobs:
         strategy:
             matrix:
                 version: ["8.1", "8.2", "8.3", "8.3-pcov", "8.4", "8.4-pcov"]
-                folder: ["php/8"]
                 include:
+                    -   version: "8.1"
+                        folder: "php/8"
+                    -   version: "8.2"
+                        folder: "php/8"
+                    -   version: "8.3"
+                        folder: "php/8"
+                    -   version: "8.4"
+                        folder: "php/8"
                     -   version: "8.3-pcov"
                         folder: "php/8-pcov"
                     -   version: "8.4-pcov"
