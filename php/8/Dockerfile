@@ -4,9 +4,8 @@ FROM php:${PHP_VERSION}-fpm
 
 ARG PICKLE_EXTENSIONS
 
-RUN apt-get update \
-  && apt-get full-upgrade -y \
-  && apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
     locales \
     git \
     ssh \
@@ -18,44 +17,41 @@ RUN apt-get update \
     libzip-dev \
     libicu-dev \
     libpq-dev \
-    libssh2-1 libssh2-1-dev \
+    libssh2-1 \
+    libssh2-1-dev \
     libxml2-dev \
     libwebp-dev \
     libmagickwand-dev \
-    # oniguruma not bundled in php, use libonig: https://www.php.net/manual/en/migration74.other-changes.php
     libonig-dev \
     libxslt1-dev \
-  && rm -rf /var/lib/apt/lists/* \
-  && dpkg-reconfigure -f noninteractive locales \
-  && echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen \
-  && echo 'fr_FR.UTF-8 UTF-8' >> /etc/locale.gen \
-  && locale-gen
+    && rm -rf /var/lib/apt/lists/* \
+    && dpkg-reconfigure -f noninteractive locales \
+    && echo 'en_US.UTF-8 UTF-8' > /etc/locale.gen \
+    && echo 'fr_FR.UTF-8 UTF-8' >> /etc/locale.gen \
+    && locale-gen
 
-# migrating to pkg-config: https://www.php.net/manual/en/migration74.other-changes.php#migration74.other-changes.pkg-config
+# Configure and install PHP extensions
 RUN docker-php-ext-configure gd --with-freetype --with-jpeg --with-webp \
-  && docker-php-ext-install -j$(nproc) intl gd opcache mbstring zip pdo_mysql mysqli soap exif xsl
+    && docker-php-ext-install -j$(nproc) intl gd opcache mbstring zip pdo_mysql mysqli soap exif xsl
 
-# Extra extensions using pickle: https://github.com/docker-library/php/pull/840#issuecomment-502251019
-ADD https://github.com/FriendsOfPHP/pickle/releases/download/v0.7.7/pickle.phar /usr/local/bin/pickle
-ENV PICKLE_EXTENSIONS=${PICKLE_EXTENSIONS:-"apcu memcached imagick xdebug"}
-RUN chmod +x /usr/local/bin/pickle && \
-  ( \
-    for extension in $PICKLE_EXTENSIONS; do \
-      pickle install -n $extension; \
-      docker-php-ext-enable $extension; \
-    done \
-  )
+# Install APCu
+RUN pecl install apcu && docker-php-ext-enable apcu
+# Install Memcached
+RUN pecl install memcached && docker-php-ext-enable memcached
+# Install PCOV
+RUN pecl install pcov && docker-php-ext-enable pcov
 
 # Install Composer
 ENV COMPOSER_ALLOW_SUPERUSER=1
-COPY --from=composer /usr/bin/composer /usr/local/bin/composer
+COPY --from=composer:latest /usr/bin/composer /usr/local/bin/composer
 
-RUN usermod -u 1000 www-data
-RUN usermod -G staff www-data
+# Set up user and permissions
+RUN usermod -u 1000 www-data && usermod -G staff www-data
 
+# Set working directory
 WORKDIR /var/www/symfony
 
-# Config
+# Copy configuration files
 COPY symfony.ini $PHP_INI_DIR/conf.d/
 COPY symfony.pool.conf $PHP_INI_DIR/pool.d/
 COPY xdebug.ini $PHP_INI_DIR/conf.d/99-custom-xdebug.ini
